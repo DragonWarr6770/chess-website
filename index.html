@@ -152,43 +152,108 @@
                 setTimeout(makeAIMove, 300);
             }
         }
-
         function makeAIMove() {
-            // Very simple random AI for now (will improve later)
-            const possibleMoves = game.moves();
-            if (possibleMoves.length === 0) return;
+            // Simple minimax AI with depth 3
+            const depth = 3;
+            let bestMove = null;
+            let bestValue = -Infinity;
 
-            const randomIdx = Math.floor(Math.random() * possibleMoves.length);
-            const move = game.move(possibleMoves[randomIdx]);
+            const possibleMoves = game.moves({ verbose: true });
 
-            board.position(game.fen());
-            updateStatus();
-            addToMoveHistory(move);
+            for (let move of possibleMoves) {
+                game.move(move);
+                const value = minimax(depth - 1, false);
+                game.undo();
+
+                if (value > bestValue) {
+                    bestValue = value;
+                    bestMove = move;
+                }
+            }
+
+            if (bestMove) {
+                game.move(bestMove);
+                board.position(game.fen());
+                updateStatus();
+                addToMoveHistory(bestMove);
+            }
+        }
+
+        // Minimax evaluation function
+        function minimax(depth, isMaximizing) {
+            if (depth === 0 || game.isGameOver()) {
+                return evaluateBoard();
+            }
+
+            const moves = game.moves();
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let move of moves) {
+                    game.move(move);
+                    bestScore = Math.max(bestScore, minimax(depth - 1, false));
+                    game.undo();
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let move of moves) {
+                    game.move(move);
+                    bestScore = Math.min(bestScore, minimax(depth - 1, true));
+                    game.undo();
+                }
+                return bestScore;
+            }
+        }
+
+        // Simple piece evaluation (positive = good for white, negative = good for black)
+        function evaluateBoard() {
+            const pieceValues = {
+                'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000
+            };
+
+            let score = 0;
+            const boardState = game.board();
+
+            for (let row of boardState) {
+                for (let square of row) {
+                    if (square) {
+                        const value = pieceValues[square.type];
+                        score += square.color === 'w' ? value : -value;
+                    }
+                }
+            }
+            return score;
         }
 
         function updateStatus() {
             let status = '';
             if (game.isCheckmate()) {
-                status = `Game Over - ${game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate!`;
+                status = `Game Over - ${game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate! 🎉`;
             } else if (game.isDraw()) {
-                status = 'Game Over - Draw';
+                if (game.isStalemate()) status = 'Game Over - Draw by stalemate';
+                else if (game.isThreefoldRepetition()) status = 'Game Over - Draw by repetition';
+                else status = 'Game Over - Draw';
             } else {
                 status = (game.turn() === 'w' ? 'White' : 'Black') + ' to move';
-                if (game.isCheck()) status += ' (in check)';
+                if (game.isCheck()) status += ' ⚠️ CHECK!';
             }
             document.getElementById('status').textContent = status;
         }
 
         function addToMoveHistory(move) {
             const historyDiv = document.getElementById('move-history');
-            const moveNumber = Math.ceil(game.history().length / 2);
-            const moveText = game.history().length % 2 === 1 
-                ? `${moveNumber}. ${move.san}` 
-                : `${move.san}`;
-            
-            const p = document.createElement('p');
-            p.textContent = moveText;
-            historyDiv.appendChild(p);
+            const moves = game.history();
+            historyDiv.innerHTML = '';
+
+            for (let i = 0; i < moves.length; i += 2) {
+                const moveNum = Math.floor(i / 2) + 1;
+                let text = `${moveNum}. ${moves[i]}`;
+                if (moves[i + 1]) text += ` ${moves[i + 1]}`;
+                const p = document.createElement('p');
+                p.textContent = text;
+                historyDiv.appendChild(p);
+            }
             historyDiv.scrollTop = historyDiv.scrollHeight;
         }
 
@@ -200,18 +265,9 @@
         }
 
         function undoMove() {
-            const move = game.undo();
-            if (move) {
+            if (game.undo()) {
                 board.position(game.fen());
-                // Remove last move from history (simple way: clear and rebuild - we'll improve later)
-                const historyDiv = document.getElementById('move-history');
-                historyDiv.innerHTML = '';
-                game.history().forEach((san, i) => {
-                    const p = document.createElement('p');
-                    const num = Math.floor(i/2) + 1;
-                    p.textContent = i % 2 === 0 ? `${num}. ${san}` : san;
-                    historyDiv.appendChild(p);
-                });
+                addToMoveHistory(null); // rebuild history
                 updateStatus();
             }
         }
@@ -224,12 +280,13 @@
             isAIEnabled = !isAIEnabled;
             const btn = document.getElementById('modeBtn');
             if (isAIEnabled) {
-                btn.textContent = 'Play vs Random AI';
-                alert("AI mode activated! The computer will play as Black for now.\n\n(We will make the AI much smarter in later steps)");
+                btn.textContent = 'Play vs AI (Minimax)';
+                playerColor = 'w'; // Player is White, AI is Black
+                alert("✅ AI upgraded to minimax (depth 3)!\n\nYou play as White. AI thinks several moves ahead.\nIt may take 1–3 seconds per move.");
             } else {
                 btn.textContent = 'Play vs Friend (Hotseat)';
             }
-            newGame(); // restart game when switching mode
+            newGame();
         }
 
         // Initialize everything
