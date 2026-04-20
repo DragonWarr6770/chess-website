@@ -3,80 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Chess Website</title>
+    <title>My Chess Website ♟️</title>
+    
+    <!-- Chessboard.js CSS from CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1e1e1e;
+            background: linear-gradient(135deg, #1e1e2e, #2a2a40);
             color: #eee;
             margin: 0;
             padding: 20px;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
         h1 {
-            margin-bottom: 10px;
+            margin: 10px 0 5px;
+            font-size: 2.8rem;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .subtitle {
+            margin-bottom: 30px;
+            color: #aaa;
         }
         .container {
             display: flex;
-            gap: 40px;
+            gap: 50px;
             flex-wrap: wrap;
             justify-content: center;
-            margin-top: 20px;
+            align-items: flex-start;
         }
-        #board {
-            width: 480px;
-            height: 480px;
-            border: 12px solid #4a2c0b;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        #myBoard {
+            width: 520px;
+            height: 520px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.7);
+            border: 15px solid #3c2f1e;
+            border-radius: 8px;
+            background: #3c2f1e;
         }
         .sidebar {
-            width: 280px;
-            background: #2a2a2a;
-            padding: 20px;
-            border-radius: 12px;
+            width: 300px;
+            background: #25253a;
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         button {
-            background: #4CAF50;
+            background: #4a9eff;
             color: white;
             border: none;
-            padding: 12px 20px;
-            margin: 8px 0;
-            border-radius: 6px;
+            padding: 14px 20px;
+            margin: 10px 0;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 16px;
             width: 100%;
+            transition: all 0.2s;
         }
         button:hover {
-            background: #45a049;
+            background: #3a8be6;
+            transform: translateY(-2px);
         }
         #status {
-            font-size: 18px;
-            margin: 15px 0;
-            min-height: 28px;
+            font-size: 22px;
+            font-weight: bold;
+            margin: 20px 0;
+            text-align: center;
+            min-height: 32px;
+            color: #ffd700;
         }
         .move-history {
-            max-height: 300px;
+            max-height: 320px;
             overflow-y: auto;
-            background: #1e1e1e;
-            padding: 10px;
-            border-radius: 6px;
+            background: #1a1a2e;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            line-height: 1.5;
+        }
+        .move-history p {
+            margin: 4px 0;
         }
     </style>
 </head>
 <body>
-    <h1>♟️ My Chess Website</h1>
-    <p>Hotseat mode + simple AI coming soon!</p>
+    <h1>♟️ Chess Arena</h1>
+    <p class="subtitle">Play against a friend or AI • Built with love in 100 steps</p>
 
     <div class="container">
-        <!-- Chessboard will be inserted here by JavaScript -->
-        <div id="board"></div>
+        <div id="myBoard"></div>
 
         <div class="sidebar">
             <h2>Game Controls</h2>
             <button onclick="newGame()">New Game</button>
-            <button onclick="undoMove()">Undo Move</button>
+            <button onclick="undoMove()">Undo Last Move</button>
+            <button onclick="flipBoard()">Flip Board</button>
             
             <div id="status">White to move</div>
             
@@ -84,41 +108,135 @@
             <div id="move-history" class="move-history"></div>
             
             <h3>Mode</h3>
-            <button onclick="toggleMode()">Switch to AI Opponent (coming in later steps)</button>
+            <button id="modeBtn" onclick="toggleMode()">Play vs Friend (Hotseat)</button>
         </div>
     </div>
 
+    <!-- Libraries via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-    <!-- We'll add a better chessboard library in the next steps -->
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
     <script>
-        // Basic placeholder - we'll replace this with a real board soon
-        console.log("Chess website loaded!");
-        
         let game = new Chess();
-        
+        let board = null;
+        let isAIEnabled = false;
+        let playerColor = 'w'; // 'w' or 'b' - for future AI mode
+
+        const config = {
+            draggable: true,
+            position: 'start',
+            onDrop: handleMove,
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+        };
+
+        function initBoard() {
+            board = Chessboard('myBoard', config);
+        }
+
+        function handleMove(source, target) {
+            // Try the move
+            const move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q' // always promote to queen for simplicity
+            });
+
+            if (move === null) return 'snapback'; // illegal move
+
+            updateStatus();
+            addToMoveHistory(move);
+            
+            // If AI mode is on and it's AI's turn, make AI move after a delay
+            if (isAIEnabled && game.turn() !== playerColor) {
+                setTimeout(makeAIMove, 300);
+            }
+        }
+
+        function makeAIMove() {
+            // Very simple random AI for now (will improve later)
+            const possibleMoves = game.moves();
+            if (possibleMoves.length === 0) return;
+
+            const randomIdx = Math.floor(Math.random() * possibleMoves.length);
+            const move = game.move(possibleMoves[randomIdx]);
+
+            board.position(game.fen());
+            updateStatus();
+            addToMoveHistory(move);
+        }
+
+        function updateStatus() {
+            let status = '';
+            if (game.isCheckmate()) {
+                status = `Game Over - ${game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate!`;
+            } else if (game.isDraw()) {
+                status = 'Game Over - Draw';
+            } else {
+                status = (game.turn() === 'w' ? 'White' : 'Black') + ' to move';
+                if (game.isCheck()) status += ' (in check)';
+            }
+            document.getElementById('status').textContent = status;
+        }
+
+        function addToMoveHistory(move) {
+            const historyDiv = document.getElementById('move-history');
+            const moveNumber = Math.ceil(game.history().length / 2);
+            const moveText = game.history().length % 2 === 1 
+                ? `${moveNumber}. ${move.san}` 
+                : `${move.san}`;
+            
+            const p = document.createElement('p');
+            p.textContent = moveText;
+            historyDiv.appendChild(p);
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+        }
+
         function newGame() {
             game.reset();
-            updateStatus();
+            board.position('start');
             document.getElementById('move-history').innerHTML = '';
-            alert("New game started! (Board not yet interactive - more steps coming)");
-        }
-        
-        function undoMove() {
-            game.undo();
             updateStatus();
         }
-        
-        function updateStatus() {
-            document.getElementById('status').textContent = game.turn() === 'w' ? 'White to move' : 'Black to move';
+
+        function undoMove() {
+            const move = game.undo();
+            if (move) {
+                board.position(game.fen());
+                // Remove last move from history (simple way: clear and rebuild - we'll improve later)
+                const historyDiv = document.getElementById('move-history');
+                historyDiv.innerHTML = '';
+                game.history().forEach((san, i) => {
+                    const p = document.createElement('p');
+                    const num = Math.floor(i/2) + 1;
+                    p.textContent = i % 2 === 0 ? `${num}. ${san}` : san;
+                    historyDiv.appendChild(p);
+                });
+                updateStatus();
+            }
         }
-        
+
+        function flipBoard() {
+            board.flip();
+        }
+
         function toggleMode() {
-            alert("AI mode will be added in upcoming steps using chess.js + a chessboard library!");
+            isAIEnabled = !isAIEnabled;
+            const btn = document.getElementById('modeBtn');
+            if (isAIEnabled) {
+                btn.textContent = 'Play vs Random AI';
+                alert("AI mode activated! The computer will play as Black for now.\n\n(We will make the AI much smarter in later steps)");
+            } else {
+                btn.textContent = 'Play vs Friend (Hotseat)';
+            }
+            newGame(); // restart game when switching mode
         }
-        
-        // Initial status
-        updateStatus();
+
+        // Initialize everything
+        window.onload = function() {
+            initBoard();
+            updateStatus();
+        };
     </script>
 </body>
 </html>
