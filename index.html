@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Chess Website</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        .container {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        #board {
+            width: 480px;
+            height: 480px;
+            border: 12px solid #4a2c0b;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        }
+        .sidebar {
+            width: 280px;
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 12px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            margin: 8px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #status {
+            font-size: 18px;
+            margin: 15px 0;
+            min-height: 28px;
+        }
+        .move-history {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+    <h1>♟️ My Chess Website</h1>
+    <p>Hotseat mode + simple AI coming soon!</p>
+
+    <div class="container">
+        <!-- Chessboard will be inserted here by JavaScript -->
+        <div id="board"></div>
+
+        <div class="sidebar">
+            <h2>Game Controls</h2>
+            <button onclick="newGame()">New Game</button>
+            <button onclick="undoMove()">Undo Move</button>
+            
+            <div id="status">White to move</div>
+            
+            <h3>Move History</h3>
+            <div id="move-history" class="move-history"></div>
+            
+            <h3>Mode</h3>
+            <button onclick="toggleMode()">Switch to AI Opponent (coming in later steps)</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <!-- We'll add a better chessboard library in the next steps -->
+
+    <script>
+        // Basic placeholder - we'll replace this with a real board soon
+        console.log("Chess website loaded!");
+        
+        let game = new Chess();
+        
+        function newGame() {
+            game.reset();
+            updateStatus();
+            document.getElementById('move-history').innerHTML = '';
+            alert("New game started! (Board not yet interactive - more steps coming)");
+        }
+        
+        function undoMove() {
+            game.undo();
+            updateStatus();
+        }
+        
+        function updateStatus() {
+            document.getElementById('status').textContent = game.turn() === 'w' ? 'White to move' : 'Black to move';
+        }
+        
+        function toggleMode() {
+            alert("AI mode will be added in upcoming steps using chess.js + a chessboard library!");
+        }
+        
+        // Initial status
+        updateStatus();
+    </script>
+</body>
+</html>
