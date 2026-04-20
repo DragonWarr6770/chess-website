@@ -8,7 +8,7 @@
     <!-- Chessboard.js CSS from CDN -->
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     
-    <style>
+        <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #1e1e2e, #2a2a40);
@@ -29,7 +29,7 @@
             margin-bottom: 30px;
             color: #aaa;
         }
-        .container {
+        .main-container {
             display: flex;
             gap: 50px;
             flex-wrap: wrap;
@@ -45,7 +45,7 @@
             background: #3c2f1e;
         }
         .sidebar {
-            width: 300px;
+            width: 320px;
             background: #25253a;
             padding: 25px;
             border-radius: 16px;
@@ -56,7 +56,7 @@
             color: white;
             border: none;
             padding: 14px 20px;
-            margin: 10px 0;
+            margin: 8px 0;
             border-radius: 8px;
             cursor: pointer;
             font-size: 16px;
@@ -75,25 +75,41 @@
             min-height: 32px;
             color: #ffd700;
         }
+        .captured {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 15px 0;
+            min-height: 40px;
+        }
+        .captured span {
+            font-size: 28px;
+            line-height: 1;
+        }
         .move-history {
-            max-height: 320px;
+            max-height: 280px;
             overflow-y: auto;
             background: #1a1a2e;
             padding: 15px;
             border-radius: 8px;
             font-family: monospace;
-            line-height: 1.5;
+            line-height: 1.6;
+            margin-bottom: 20px;
         }
-        .move-history p {
-            margin: 4px 0;
+        .theme-toggle {
+            background: #666;
+            margin-top: 15px;
+        }
+        .theme-toggle:hover {
+            background: #888;
         }
     </style>
 </head>
 <body>
-    <h1>♟️ Chess Arena</h1>
-    <p class="subtitle">Play against a friend or AI • Built with love in 100 steps</p>
+        <h1>♟️ Chess Arena</h1>
+    <p class="subtitle">Play vs Friend or AI • Free & Open Source</p>
 
-    <div class="container">
+    <div class="main-container">
         <div id="myBoard"></div>
 
         <div class="sidebar">
@@ -101,14 +117,21 @@
             <button onclick="newGame()">New Game</button>
             <button onclick="undoMove()">Undo Last Move</button>
             <button onclick="flipBoard()">Flip Board</button>
+            <button onclick="toggleTheme()" class="theme-toggle">Toggle Dark/Light Theme</button>
             
             <div id="status">White to move</div>
+            
+            <h3>Captured by White</h3>
+            <div id="captured-white" class="captured"></div>
+            
+            <h3>Captured by Black</h3>
+            <div id="captured-black" class="captured"></div>
             
             <h3>Move History</h3>
             <div id="move-history" class="move-history"></div>
             
             <h3>Mode</h3>
-            <button id="modeBtn" onclick="toggleMode()">Play vs Friend (Hotseat)</button>
+            <button id="modeBtn" onclick="toggleMode()">Play vs AI (Minimax)</button>
         </div>
     </div>
 
@@ -117,11 +140,38 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
+       <!-- Libraries via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
     <script>
         let game = new Chess();
         let board = null;
-        let isAIEnabled = false;
-        let playerColor = 'w'; // 'w' or 'b' - for future AI mode
+        let isAIEnabled = true;
+        let playerColor = 'w';
+        let isDarkTheme = true;
+
+        // Simple move sound using Web Audio API (no external files needed)
+        function playMoveSound(isCapture) {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                oscillator.type = isCapture ? 'sawtooth' : 'sine';
+                oscillator.frequency.setValueAtTime(isCapture ? 800 : 600, audioContext.currentTime);
+                gain.gain.value = 0.3;
+                
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                oscillator.start();
+                setTimeout(() => {
+                    oscillator.stop();
+                }, isCapture ? 80 : 120);
+            } catch(e) {}
+        }
 
         const config = {
             draggable: true,
@@ -135,37 +185,37 @@
         }
 
         function handleMove(source, target) {
-            // Try the move
             const move = game.move({
                 from: source,
                 to: target,
-                promotion: 'q' // always promote to queen for simplicity
+                promotion: 'q'
             });
 
-            if (move === null) return 'snapback'; // illegal move
+            if (move === null) return 'snapback';
 
+            playMoveSound(move.captured);
+            updateCapturedPieces();
             updateStatus();
-            addToMoveHistory(move);
+            addToMoveHistory();
             
-            // If AI mode is on and it's AI's turn, make AI move after a delay
             if (isAIEnabled && game.turn() !== playerColor) {
-                setTimeout(makeAIMove, 300);
+                setTimeout(makeAIMove, 250);
             }
         }
+
         function makeAIMove() {
-            // Simple minimax AI with depth 3
             const depth = 3;
             let bestMove = null;
-            let bestValue = -Infinity;
+            let bestValue = game.turn() === 'w' ? -Infinity : Infinity;
 
             const possibleMoves = game.moves({ verbose: true });
 
             for (let move of possibleMoves) {
                 game.move(move);
-                const value = minimax(depth - 1, false);
+                const value = minimax(depth - 1, game.turn() === 'w');
                 game.undo();
 
-                if (value > bestValue) {
+                if ((game.turn() === 'b' && value > bestValue) || (game.turn() === 'w' && value < bestValue)) {
                     bestValue = value;
                     bestMove = move;
                 }
@@ -174,12 +224,13 @@
             if (bestMove) {
                 game.move(bestMove);
                 board.position(game.fen());
+                playMoveSound(bestMove.captured);
+                updateCapturedPieces();
                 updateStatus();
-                addToMoveHistory(bestMove);
+                addToMoveHistory();
             }
         }
 
-        // Minimax evaluation function
         function minimax(depth, isMaximizing) {
             if (depth === 0 || game.isGameOver()) {
                 return evaluateBoard();
@@ -188,30 +239,26 @@
             const moves = game.moves();
 
             if (isMaximizing) {
-                let bestScore = -Infinity;
+                let best = -Infinity;
                 for (let move of moves) {
                     game.move(move);
-                    bestScore = Math.max(bestScore, minimax(depth - 1, false));
+                    best = Math.max(best, minimax(depth - 1, false));
                     game.undo();
                 }
-                return bestScore;
+                return best;
             } else {
-                let bestScore = Infinity;
+                let best = Infinity;
                 for (let move of moves) {
                     game.move(move);
-                    bestScore = Math.min(bestScore, minimax(depth - 1, true));
+                    best = Math.min(best, minimax(depth - 1, true));
                     game.undo();
                 }
-                return bestScore;
+                return best;
             }
         }
 
-        // Simple piece evaluation (positive = good for white, negative = good for black)
         function evaluateBoard() {
-            const pieceValues = {
-                'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000
-            };
-
+            const pieceValues = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
             let score = 0;
             const boardState = game.board();
 
@@ -226,29 +273,48 @@
             return score;
         }
 
+        function updateCapturedPieces() {
+            const history = game.history({ verbose: true });
+            let whiteCaptured = [];
+            let blackCaptured = [];
+
+            history.forEach(move => {
+                if (move.captured) {
+                    const piece = move.captured.toUpperCase();
+                    if (move.color === 'w') {
+                        blackCaptured.push(piece);
+                    } else {
+                        whiteCaptured.push(piece);
+                    }
+                }
+            });
+
+            const unicodePieces = { P:'♙', N:'♘', B:'♗', R:'♖', Q:'♕', K:'♔' };
+
+            document.getElementById('captured-white').innerHTML = whiteCaptured.map(p => `<span>${unicodePieces[p] || p}</span>`).join('');
+            document.getElementById('captured-black').innerHTML = blackCaptured.map(p => `<span>${unicodePieces[p] || p}</span>`).join('');
+        }
+
         function updateStatus() {
             let status = '';
             if (game.isCheckmate()) {
-                status = `Game Over - ${game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate! 🎉`;
+                status = `Game Over — ${game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate! 🎉`;
             } else if (game.isDraw()) {
-                if (game.isStalemate()) status = 'Game Over - Draw by stalemate';
-                else if (game.isThreefoldRepetition()) status = 'Game Over - Draw by repetition';
-                else status = 'Game Over - Draw';
+                status = game.isStalemate() ? 'Draw by stalemate' : 'Game Over — Draw';
             } else {
-                status = (game.turn() === 'w' ? 'White' : 'Black') + ' to move';
+                status = `${game.turn() === 'w' ? 'White' : 'Black'} to move`;
                 if (game.isCheck()) status += ' ⚠️ CHECK!';
             }
             document.getElementById('status').textContent = status;
         }
 
-        function addToMoveHistory(move) {
+        function addToMoveHistory() {
             const historyDiv = document.getElementById('move-history');
             const moves = game.history();
             historyDiv.innerHTML = '';
-
             for (let i = 0; i < moves.length; i += 2) {
-                const moveNum = Math.floor(i / 2) + 1;
-                let text = `${moveNum}. ${moves[i]}`;
+                const num = Math.floor(i / 2) + 1;
+                let text = `${num}. ${moves[i]}`;
                 if (moves[i + 1]) text += ` ${moves[i + 1]}`;
                 const p = document.createElement('p');
                 p.textContent = text;
@@ -261,13 +327,16 @@
             game.reset();
             board.position('start');
             document.getElementById('move-history').innerHTML = '';
+            document.getElementById('captured-white').innerHTML = '';
+            document.getElementById('captured-black').innerHTML = '';
             updateStatus();
         }
 
         function undoMove() {
             if (game.undo()) {
                 board.position(game.fen());
-                addToMoveHistory(null); // rebuild history
+                updateCapturedPieces();
+                addToMoveHistory();
                 updateStatus();
             }
         }
@@ -281,15 +350,26 @@
             const btn = document.getElementById('modeBtn');
             if (isAIEnabled) {
                 btn.textContent = 'Play vs AI (Minimax)';
-                playerColor = 'w'; // Player is White, AI is Black
-                alert("✅ AI upgraded to minimax (depth 3)!\n\nYou play as White. AI thinks several moves ahead.\nIt may take 1–3 seconds per move.");
+                playerColor = 'w';
+                alert("AI Mode Active!\nYou are White.\nAI uses minimax (may take 1-4 seconds per move).");
             } else {
                 btn.textContent = 'Play vs Friend (Hotseat)';
             }
             newGame();
         }
 
-        // Initialize everything
+        function toggleTheme() {
+            isDarkTheme = !isDarkTheme;
+            if (!isDarkTheme) {
+                document.body.style.background = 'linear-gradient(135deg, #f0f0f0, #e0e0e0)';
+                document.body.style.color = '#222';
+            } else {
+                document.body.style.background = 'linear-gradient(135deg, #1e1e2e, #2a2a40)';
+                document.body.style.color = '#eee';
+            }
+            alert("Theme switched! (More advanced theming coming later)");
+        }
+
         window.onload = function() {
             initBoard();
             updateStatus();
